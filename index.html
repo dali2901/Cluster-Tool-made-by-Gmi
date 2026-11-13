@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="color-scheme" content="light">
+<title>Clusters 九點練習器</title>
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#f1f1f3}
+  body{
+    display:flex;justify-content:center;align-items:center;
+    font-family:system-ui,-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    color:#1c1c1e;-webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  }
+
+  /* 9:16 stage — fills the viewport on portrait phones, centred 9:16 elsewhere */
+  .stage{
+    position:relative;isolation:isolate;overflow:hidden;background:#fff;
+    width:100vw;height:100vh;height:100dvh;
+    display:flex;flex-direction:column;
+  }
+  @media (min-aspect-ratio:3/4){
+    .stage{
+      width:calc(100vh * 9 / 16);width:calc(100dvh * 9 / 16);max-width:100vw;
+      box-shadow:0 0 0 1px rgba(0,0,0,.05),0 12px 40px rgba(0,0,0,.08);
+    }
+  }
+
+  /* front camera layer (mirrored) */
+  .cam{
+    position:absolute;inset:0;width:100%;height:100%;z-index:0;
+    object-fit:cover;transform:scaleX(-1);background:#000;display:none;
+  }
+  .stage.cam-on .cam{display:block}
+
+  /* figure */
+  .figure{
+    position:relative;z-index:1;flex:1 1 auto;min-height:0;
+    display:flex;align-items:center;justify-content:center;
+    padding:calc(56px + env(safe-area-inset-top,0px)) 14px 10px;
+    pointer-events:none;
+  }
+  #fig{display:block;width:100%;height:100%;overflow:visible}
+  .guide{fill:none;stroke:#d4d4d8;stroke-width:1.5;stroke-dasharray:6 6}
+  .cross{stroke:#e0e0e4;stroke-width:1.5;stroke-dasharray:4 6}
+  .dot{stroke-width:2.5}
+  .stage.cam-on #fig{filter:drop-shadow(0 0 2px rgba(0,0,0,.45))}
+  .stage.cam-on .guide,.stage.cam-on .cross{stroke:rgba(255,255,255,.85)}
+
+  /* fullscreen */
+  .btn.fs{
+    position:absolute;z-index:3;width:42px;height:42px;
+    top:calc(10px + env(safe-area-inset-top,0px));right:calc(10px + env(safe-area-inset-right,0px));
+  }
+
+  /* controls */
+  .controls{
+    position:relative;z-index:2;flex:0 0 auto;
+    padding:8px calc(14px + env(safe-area-inset-right,0px)) max(18px, calc(env(safe-area-inset-bottom,0px) + 12px)) calc(14px + env(safe-area-inset-left,0px));
+    transition:background-color .2s;
+  }
+  .stage.cam-on .controls{background:rgba(255,255,255,.9);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .controls-inner{max-width:440px;margin:0 auto}
+
+  .seek{display:flex;align-items:center;gap:12px;height:38px}
+  .count{flex:0 0 auto;min-width:4.6em;text-align:right;font-size:15px;color:#3a3a3c;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;flex:1 1 auto;min-width:0;height:36px;margin:0;
+    background:transparent;cursor:pointer;touch-action:none;--p:0%;
+  }
+  input[type=range]:focus{outline:none}
+  input[type=range]::-webkit-slider-runnable-track{
+    height:6px;border-radius:3px;
+    background:linear-gradient(to right,#b9b9c0 var(--p),#e5e5ea var(--p));
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:30px;height:20px;margin-top:-7px;border-radius:10px;
+    background:#fff;border:1px solid #c7c7cc;box-shadow:0 1px 4px rgba(0,0,0,.18);
+  }
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:#e5e5ea}
+  input[type=range]::-moz-range-progress{height:6px;border-radius:3px;background:#b9b9c0}
+  input[type=range]::-moz-range-thumb{
+    width:28px;height:18px;border-radius:10px;background:#fff;border:1px solid #c7c7cc;
+    box-shadow:0 1px 4px rgba(0,0,0,.18);
+  }
+  input[type=range]:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 3px rgba(0,122,255,.35)}
+  input[type=range]:focus-visible::-moz-range-thumb{box-shadow:0 0 0 3px rgba(0,122,255,.35)}
+
+  .bar{
+    display:grid;gap:8px;margin-top:8px;
+    grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.3fr) minmax(0,1fr);
+  }
+  .btn,.speed{
+    height:46px;min-width:0;margin:0;border:1px solid #d8d8dd;border-radius:12px;background:#fff;
+    color:#1c1c1e;touch-action:manipulation;cursor:pointer;
+  }
+  .btn{display:flex;align-items:center;justify-content:center;padding:0}
+  .btn svg{width:22px;height:22px;pointer-events:none}
+  .btn:active{background:#f2f2f4}
+  .btn.primary{background:#111;border-color:#111;color:#fff}
+  .btn.primary:active{background:#333}
+  .btn:disabled{opacity:.35;cursor:default}
+  .btn[aria-pressed="true"]{background:#e9e9ee;border-color:#8e8e93}
+  .btn:focus-visible,.speed:focus-visible{outline:2px solid #007aff;outline-offset:2px}
+  .speed{
+    -webkit-appearance:none;appearance:none;width:100%;padding:0 4px;
+    font-family:inherit;font-size:16px;font-weight:600;line-height:1;text-align:center;text-align-last:center;
+  }
+  .ico-on{display:none}
+  [aria-pressed="true"] .ico-on,.is-playing .ico-on,.is-fs .ico-on{display:block}
+  [aria-pressed="true"] .ico-off,.is-playing .ico-off,.is-fs .ico-off{display:none}
+
+  /* messages */
+  .toast{
+    position:absolute;left:14px;right:14px;bottom:calc(100% + 6px);z-index:4;
+    margin:0 auto;max-width:420px;padding:10px 14px;border-radius:12px;
+    background:rgba(28,28,30,.9);color:#fff;font-size:14px;line-height:1.4;text-align:center;
+  }
+  .toast[hidden]{display:none}
+  .nojs{
+    margin:0 auto 8px;max-width:440px;padding:9px 12px;border-radius:10px;
+    background:#fff4e5;border:1px solid #f3c98b;color:#7a4b00;font-size:13.5px;line-height:1.45;text-align:center;
+  }
+  .js .nojs{display:none}
+  html:not(.js) .seek,html:not(.js) .bar{opacity:.5;pointer-events:none}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main class="stage" id="stage">
+  <video class="cam" id="cam" muted playsinline autoplay aria-label="前鏡頭即時畫面（鏡像）"></video>
+
+  <div class="figure">
+    <svg id="fig" viewBox="0 0 300 300" role="img" aria-label="Clusters 九點動畫">
+      <rect class="guide" x="20" y="20" width="260" height="260" rx="2"/>
+      <line class="cross" x1="150" y1="20" x2="150" y2="280"/>
+      <line class="cross" x1="20" y1="150" x2="280" y2="150"/>
+      <circle class="dot" cx="50" cy="50" r="14" fill="#ffffff" stroke="#8e8e93"/>
+      <circle class="dot" cx="250" cy="50" r="14" fill="#ffffff" stroke="#8e8e93"/>
+      <circle class="dot" cx="50" cy="250" r="14" fill="#ffffff" stroke="#8e8e93"/>
+      <circle class="dot" cx="250" cy="250" r="14" fill="#ffffff" stroke="#8e8e93"/>
+      <circle class="dot" cx="150" cy="150" r="14" fill="#ffffff" stroke="#8e8e93"/>
+      <circle id="mT" class="dot mover" cx="220" cy="50" r="14" fill="#ffffff" stroke="#8e8e93">
+        <animate attributeName="cx" values="220;220;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;80;220" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="fill" values="#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="stroke" values="#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+      </circle>
+      <circle id="mL" class="dot mover" cx="50" cy="80" r="14" fill="#ffffff" stroke="#8e8e93">
+        <animate attributeName="cy" values="80;80;80;80;80;220;220;220;220;220;220;220;220;220;220;220;220;220;220;220;80;80;80;80" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="fill" values="#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="stroke" values="#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+      </circle>
+      <circle id="mB" class="dot mover" cx="80" cy="250" r="14" fill="#ffffff" stroke="#8e8e93">
+        <animate attributeName="cx" values="80;80;80;80;80;80;80;80;220;220;220;220;220;220;220;220;220;80;80;80;80;80;80;80" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="fill" values="#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="stroke" values="#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+      </circle>
+      <circle id="mR" class="dot mover" cx="250" cy="220" r="14" fill="#ffffff" stroke="#8e8e93">
+        <animate attributeName="cy" values="220;220;220;220;220;220;220;220;220;220;220;80;80;80;220;220;220;220;220;220;220;220;220;220" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="fill" values="#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ff1f1f;#ff1f1f;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff;#ffffff" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+        <animate attributeName="stroke" values="#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#c40000;#c40000;#8e8e93;#c40000;#c40000;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93;#8e8e93" dur="12s" calcMode="discrete" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </div>
+
+  <button class="btn fs" id="fsBtn" type="button" aria-label="全螢幕" hidden>
+    <svg class="ico-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    <svg class="ico-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+  </button>
+
+  <div class="controls" id="controls">
+    <p class="toast" id="toast" role="status" aria-live="polite" hidden></p>
+    <div class="controls-inner">
+      <p class="nojs" role="note">此預覽環境限制 JavaScript：圖形仍會往返播放，但播放控制與前鏡頭無法使用。請改用瀏覽器（Chrome、Safari 等）開啟此檔案。</p>
+
+      <div class="seek">
+        <input type="range" id="seek" min="1" max="13" step="1" value="1" aria-label="畫格" aria-valuetext="第 1 格，共 13 格">
+        <span class="count" id="count" aria-hidden="true">1 / 13</span>
+      </div>
+
+      <div class="bar">
+        <button class="btn" id="prevBtn" type="button" aria-label="上一格">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 5v14"/><path d="M18 6.5 9.5 12l8.5 5.5z" fill="currentColor"/></svg>
+        </button>
+        <button class="btn primary" id="playBtn" type="button" aria-label="播放">
+          <svg class="ico-off" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+          <svg class="ico-on" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="6.5" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="13.5" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button class="btn" id="nextBtn" type="button" aria-label="下一格">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M18 5v14"/><path d="M6 6.5 14.5 12 6 17.5z" fill="currentColor"/></svg>
+        </button>
+        <button class="btn" id="replayBtn" type="button" aria-label="重播">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4v5h5"/></svg>
+        </button>
+        <select class="speed" id="speed" aria-label="播放速度">
+          <option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+          <option value="1.75">1.75×</option><option value="2">2×</option><option value="2.25">2.25×</option>
+          <option value="2.5">2.5×</option><option value="2.75">2.75×</option><option value="3">3×</option>
+        </select>
+        <button class="btn" id="camBtn" type="button" aria-label="開啟前鏡頭" aria-pressed="false">
+          <svg class="ico-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.6-2.2h6.2L16.7 6h1.8A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.6"/></svg>
+          <svg class="ico-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.6-2.2h6.2L16.7 6h1.8A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.6"/><path d="M3 3l18 18"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- geometry (viewBox 0 0 300 300) ---------- */
+  const TOTAL = 13;
+  const BASE_MS = 500;
+  const WHITE = { fill: '#ffffff', stroke: '#8e8e93' };
+  const RED   = { fill: '#ff1f1f', stroke: '#c40000' };
+  const G = 30; // moving-dot centre to fixed-corner centre when in place
+  const MOVERS = [ // movement order: top R→L, left T→B, bottom L→R, right B→T
+    { id: 'mT', from: [250 - G, 50], to: [50 + G, 50] },
+    { id: 'mL', from: [50, 50 + G], to: [50, 250 - G] },
+    { id: 'mB', from: [50 + G, 250], to: [250 - G, 250] },
+    { id: 'mR', from: [250, 250 - G], to: [250, 50 + G] },
+  ];
+  // Frame 1 = initial; move i uses frames 2+3i (start red), 3+3i (end red), 4+3i (end white)
+  function stateOf(frame, i) {
+    const m = MOVERS[i], s = 2 + 3 * i;
+    if (frame < s)      return { p: m.from, c: WHITE };
+    if (frame === s)    return { p: m.from, c: RED };
+    if (frame === s + 1) return { p: m.to, c: RED };
+    return { p: m.to, c: WHITE };
+  }
+
+  /* ---------- elements ---------- */
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), fig = $('fig'), seek = $('seek'), count = $('count');
+  const prevBtn = $('prevBtn'), playBtn = $('playBtn'), nextBtn = $('nextBtn');
+  const replayBtn = $('replayBtn'), speedSel = $('speed'), camBtn = $('camBtn');
+  const fsBtn = $('fsBtn'), video = $('cam'), toastEl = $('toast');
+
+  // JavaScript takes over from the built-in SVG (SMIL) fallback animation
+  fig.querySelectorAll('animate, set').forEach((n) => n.remove());
+  const dots = MOVERS.map((m) => $(m.id));
+
+  /* ---------- player ---------- */
+  let frame = 1, dir = 1, playing = false, speed = 1, raf = 0, due = 0;
+  const interval = () => BASE_MS / speed;
+
+  function render() {
+    MOVERS.forEach((_, i) => {
+      const { p, c } = stateOf(frame, i), d = dots[i];
+      d.setAttribute('cx', p[0]); d.setAttribute('cy', p[1]);
+      d.setAttribute('fill', c.fill); d.setAttribute('stroke', c.stroke);
+    });
+    seek.value = frame;
+    seek.style.setProperty('--p', ((frame - 1) / (TOTAL - 1) * 100) + '%');
+    seek.setAttribute('aria-valuetext', `第 ${frame} 格，共 ${TOTAL} 格`);
+    count.textContent = `${frame} / ${TOTAL}`;
+    prevBtn.disabled = frame <= 1;
+    nextBtn.disabled = frame >= TOTAL;
+    stage.dataset.frame = frame;
+    stage.dataset.dir = dir;
+  }
+
+  // ping-pong: 1→…→13→12→…→1→2…, each end shown once
+  function advance() {
+    if (frame + dir < 1 || frame + dir > TOTAL) dir = -dir;
+    frame += dir;
+    render();
+  }
+
+  function loop(t) {
+    raf = 0;
+    if (!playing) return;
+    if (t >= due) {
+      advance();
+      due += interval();
+      if (t - due > interval()) due = t + interval(); // resync after tab was hidden
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function setPlayUI() {
+    playBtn.classList.toggle('is-playing', playing);
+    playBtn.setAttribute('aria-label', playing ? '暫停' : '播放');
+    stage.dataset.playing = playing ? '1' : '0';
+  }
+  function play() {
+    if (playing) return;
+    playing = true;
+    due = performance.now() + interval();
+    raf = requestAnimationFrame(loop);
+    setPlayUI();
+  }
+  function pause() {
+    playing = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+    setPlayUI();
+  }
+  function goTo(f) {
+    frame = Math.max(1, Math.min(TOTAL, f | 0));
+    render();
+  }
+
+  playBtn.addEventListener('click', () => (playing ? pause() : play()));
+  prevBtn.addEventListener('click', () => { pause(); goTo(frame - 1); });
+  nextBtn.addEventListener('click', () => { pause(); goTo(frame + 1); });
+  replayBtn.addEventListener('click', () => { pause(); dir = 1; goTo(1); play(); });
+  speedSel.addEventListener('change', () => {
+    speed = parseFloat(speedSel.value) || 1;
+    if (playing) due = performance.now() + interval(); // keep frame & direction
+    stage.dataset.speed = speed;
+  });
+  seek.addEventListener('pointerdown', pause);
+  seek.addEventListener('input', () => { pause(); goTo(+seek.value); });
+
+  /* ---------- messages ---------- */
+  let toastTimer = 0;
+  function toast(msg, ms = 4500) {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, ms);
+  }
+  toastEl.addEventListener('click', () => { toastEl.hidden = true; });
+
+  /* ---------- front camera (video only, nothing recorded or uploaded) ---------- */
+  let stream = null, camPending = false;
+
+  function setCamUI(on) {
+    camBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    camBtn.setAttribute('aria-label', on ? '關閉前鏡頭' : '開啟前鏡頭');
+    stage.classList.toggle('cam-on', on);
+  }
+  function camOff() {
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+    try { video.pause(); } catch (_) {}
+    video.srcObject = null;
+    setCamUI(false);
+  }
+  function camError(e) {
+    const n = e && e.name;
+    if (n === 'NotAllowedError' || n === 'PermissionDeniedError' || n === 'SecurityError')
+      return '未取得鏡頭權限，可在瀏覽器網站設定中允許後再試。';
+    if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError')
+      return '找不到可用的鏡頭。';
+    if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError')
+      return '鏡頭正被其他程式使用，請關閉後再試。';
+    return '無法開啟鏡頭。';
+  }
+  async function camOn() {
+    if (!window.isSecureContext) { toast('前鏡頭需要 HTTPS 頁面，請以 https:// 網址開啟。'); return; }
+    const md = navigator.mediaDevices;
+    if (!md || typeof md.getUserMedia !== 'function') { toast('此瀏覽環境不支援鏡頭。'); return; }
+    camPending = true;
+    camBtn.setAttribute('aria-busy', 'true');
+    try {
+      let s;
+      try {
+        s = await md.getUserMedia({ audio: false, video: { facingMode: { ideal: 'user' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+      } catch (e) {
+        if (e && e.name === 'OverconstrainedError') s = await md.getUserMedia({ audio: false, video: true });
+        else throw e;
+      }
+      if (document.visibilityState === 'hidden') { s.getTracks().forEach((t) => t.stop()); return; }
+      stream = s;
+      s.getTracks().forEach((t) => t.addEventListener('ended', () => { if (stream === s) camOff(); }));
+      video.srcObject = s;
+      setCamUI(true);
+      try { await video.play(); } catch (_) {}
+    } catch (e) {
+      camOff();
+      toast(camError(e));
+    } finally {
+      camPending = false;
+      camBtn.removeAttribute('aria-busy');
+    }
+  }
+  camBtn.addEventListener('click', () => {
+    if (camPending) return;
+    stream ? camOff() : camOn();
+  });
+  // release the camera when leaving the page
+  window.addEventListener('pagehide', camOff);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') camOff(); });
+
+  /* ---------- fullscreen ---------- */
+  const root = document.documentElement;
+  const fsSupported = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled) &&
+    !!(root.requestFullscreen || root.webkitRequestFullscreen);
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function setFsUI() {
+    const on = !!fsElement();
+    fsBtn.classList.toggle('is-fs', on);
+    fsBtn.setAttribute('aria-label', on ? '結束全螢幕' : '全螢幕');
+  }
+  if (fsSupported) {
+    fsBtn.hidden = false;
+    fsBtn.addEventListener('click', () => {
+      try {
+        let p;
+        if (fsElement()) p = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        else p = (root.requestFullscreen || root.webkitRequestFullscreen).call(root, { navigationUI: 'hide' });
+        if (p && p.catch) p.catch(() => toast('無法切換全螢幕。'));
+      } catch (_) { toast('無法切換全螢幕。'); }
+    });
+    document.addEventListener('fullscreenchange', setFsUI);
+    document.addEventListener('webkitfullscreenchange', setFsUI);
+  }
+
+  /* ---------- start ---------- */
+  stage.dataset.speed = speed;
+  render();
+  play();
+})();
+</script>
+</body>
+</html>
